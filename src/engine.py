@@ -1,6 +1,6 @@
 from src.collector.log_collector import LogCollector
 from src.parser.linux_auth_parser import LinuxAuthParser
-from src.detectors.brute_force import BruteForceDetector
+from src.detectors.detection_manager import DetectionManager
 from src.correlation.correlation_engine import CorrelationEngine
 from src.risk.risk_engine import RiskEngine
 
@@ -12,10 +12,7 @@ class SentinelEngine:
         self.collector = LogCollector(input_file)
         self.parser = LinuxAuthParser()
 
-        self.detector = BruteForceDetector(
-            threshold=5,
-            window_seconds=60
-        )
+        self.detection_manager = DetectionManager()
 
         self.correlation = CorrelationEngine(
             correlation_window_seconds=60
@@ -29,18 +26,12 @@ class SentinelEngine:
         print("SENTINELSOC SECURITY OPERATIONS ENGINE")
         print("=" * 60)
 
-        # --------------------------------------------------
-        # 1. Collect raw logs
-        # --------------------------------------------------
-
+        # 1. Collect logs
         raw_logs = self.collector.collect()
 
         print(f"\n[+] Collected logs: {len(raw_logs)}")
 
-        # --------------------------------------------------
         # 2. Parse logs
-        # --------------------------------------------------
-
         events = []
 
         for log in raw_logs:
@@ -52,18 +43,12 @@ class SentinelEngine:
 
         print(f"[+] Parsed security events: {len(events)}")
 
-        # --------------------------------------------------
         # 3. Detect attacks
-        # --------------------------------------------------
-
-        alerts = self.detector.detect(events)
+        alerts = self.detection_manager.detect(events)
 
         print(f"[+] Detection alerts: {len(alerts)}")
 
-        # --------------------------------------------------
         # 4. Correlate events
-        # --------------------------------------------------
-
         incidents = self.correlation.correlate(
             events,
             alerts
@@ -71,10 +56,7 @@ class SentinelEngine:
 
         print(f"[+] Correlated incidents: {len(incidents)}")
 
-        # --------------------------------------------------
         # 5. Calculate risk
-        # --------------------------------------------------
-
         final_incidents = []
 
         for incident in incidents:
@@ -92,10 +74,7 @@ class SentinelEngine:
                 final_incident
             )
 
-        # --------------------------------------------------
         # 6. Display incidents
-        # --------------------------------------------------
-
         print("\n" + "=" * 60)
         print("SECURITY INCIDENTS")
         print("=" * 60)
