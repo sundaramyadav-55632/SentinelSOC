@@ -1,0 +1,19 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Project data
+data/raw/*
+logs/*
+
+# OS
+.DS_Store
+Thumbs.db
