@@ -9,10 +9,18 @@ class SecurityEvent:
     source: str
     event_type: str
     severity: str
+
     username: Optional[str] = None
+
     source_ip: Optional[str] = None
+    source_port: Optional[int] = None
+
     destination_ip: Optional[str] = None
     destination_port: Optional[int] = None
+
+    protocol: Optional[str] = None
+    action: Optional[str] = None
+
     message: Optional[str] = None
 
     def to_dict(self):
