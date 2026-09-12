@@ -1,0 +1,8 @@
+Sep 12 18:30:01 firewall kernel: TCP connection from 192.168.1.70:49100 to 192.168.1.10:21
+Sep 12 18:30:02 firewall kernel: TCP connection from 192.168.1.70:49101 to 192.168.1.10:22
+Sep 12 18:30:03 firewall kernel: TCP connection from 192.168.1.70:49102 to 192.168.1.10:23
+Sep 12 18:30:04 firewall kernel: TCP connection from 192.168.1.70:49103 to 192.168.1.10:25
+Sep 12 18:30:05 firewall kernel: TCP connection from 192.168.1.70:49104 to 192.168.1.10:53
+Sep 12 18:30:06 firewall kernel: TCP connection from 192.168.1.70:49105 to 192.168.1.10:80
+Sep 12 18:30:07 firewall kernel: TCP connection from 192.168.1.70:49106 to 192.168.1.10:443
+Sep 12 18:30:08 firewall kernel: TCP connection from 192.168.1.70:49107 to 192.168.1.10:445

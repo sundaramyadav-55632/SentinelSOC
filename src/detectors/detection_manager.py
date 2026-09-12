@@ -1,5 +1,6 @@
 from src.detectors.brute_force import BruteForceDetector
 from src.detectors.password_spray import PasswordSprayDetector
+from src.detectors.port_scan import PortScanDetector
 
 
 class DetectionManager:
@@ -12,6 +13,10 @@ class DetectionManager:
                 window_seconds=60
             ),
             PasswordSprayDetector(
+                threshold=5,
+                window_seconds=60
+            ),
+            PortScanDetector(
                 threshold=5,
                 window_seconds=60
             )
