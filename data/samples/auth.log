@@ -1,0 +1,6 @@
+Sep 12 17:30:01 server sshd[1001]: Failed password for admin from 192.168.1.50 port 52341 ssh2
+Sep 12 17:30:04 server sshd[1002]: Failed password for admin from 192.168.1.50 port 52342 ssh2
+Sep 12 17:30:07 server sshd[1003]: Failed password for admin from 192.168.1.50 port 52343 ssh2
+Sep 12 17:30:10 server sshd[1004]: Failed password for admin from 192.168.1.50 port 52344 ssh2
+Sep 12 17:30:13 server sshd[1005]: Failed password for admin from 192.168.1.50 port 52345 ssh2
+Sep 12 17:30:20 server sshd[1006]: Accepted password for admin from 192.168.1.50 port 52346 ssh2
