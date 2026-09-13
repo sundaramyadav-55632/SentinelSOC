@@ -4,66 +4,52 @@ from src.detectors.detection_manager import DetectionManager
 from src.correlation.correlation_engine import CorrelationEngine
 from src.risk.risk_engine import RiskEngine
 from src.response.response_engine import ResponseEngine
+from src.database.database import Database
 from src.database.incident_store import IncidentStore
 from src.intelligence.incident_intelligence import IncidentIntelligence
 
 
 class SentinelEngine:
 
-    def __init__(
-        self,
-        input_files,
-        correlation_window_seconds=300
-    ):
+    def __init__(self, input_files):
 
         self.input_files = input_files
-
-        # ---------------------------------------------------------
-        # Core pipeline components
-        # ---------------------------------------------------------
 
         self.collector = MultiSourceCollector(
             input_files
         )
 
-        self.parser = ParserRouter()
+        self.parser_router = ParserRouter()
 
-        self.detector = DetectionManager()
+        self.detection_manager = DetectionManager()
 
-        self.correlation = CorrelationEngine(
-            correlation_window_seconds
-        )
+        self.correlation_engine = CorrelationEngine()
 
         self.risk_engine = RiskEngine()
 
         self.response_engine = ResponseEngine()
 
-        self.store = IncidentStore()
+        self.database = Database()
 
-        # ---------------------------------------------------------
-        # Security intelligence layer
-        # MITRE + confidence + evidence
-        # ---------------------------------------------------------
+        self.store = IncidentStore(
+            self.database
+        )
 
         self.intelligence = IncidentIntelligence()
 
+    # =========================================================
+    # RUN SOC PIPELINE
+    # =========================================================
+
     def run(self):
 
-        print(
-            "=" * 70
-        )
+        print("=" * 65)
+        print("SENTINELSOC UNIFIED SECURITY OPERATIONS ENGINE")
+        print("=" * 65)
 
-        print(
-            "SENTINELSOC UNIFIED SECURITY OPERATIONS ENGINE"
-        )
-
-        print(
-            "=" * 70
-        )
-
-        # =========================================================
+        # =====================================================
         # 1. COLLECT LOGS
-        # =========================================================
+        # =====================================================
 
         logs = self.collector.collect()
 
@@ -71,9 +57,9 @@ class SentinelEngine:
             f"\n[+] Collected logs: {len(logs)}"
         )
 
-        # =========================================================
+        # =====================================================
         # 2. PARSE LOGS
-        # =========================================================
+        # =====================================================
 
         events = []
 
@@ -81,15 +67,13 @@ class SentinelEngine:
 
             try:
 
-                event = self.parser.parse(
+                event = self.parser_router.parse(
                     log
                 )
 
                 if event is not None:
 
-                    events.append(
-                        event
-                    )
+                    events.append(event)
 
             except Exception as error:
 
@@ -102,9 +86,9 @@ class SentinelEngine:
             f"{len(events)}"
         )
 
-        # =========================================================
+        # =====================================================
         # 3. STORE EVENTS
-        # =========================================================
+        # =====================================================
 
         stored_events = 0
 
@@ -112,8 +96,26 @@ class SentinelEngine:
 
             try:
 
+                if hasattr(
+                    event,
+                    "to_dict"
+                ):
+
+                    event_data = event.to_dict()
+
+                elif isinstance(
+                    event,
+                    dict
+                ):
+
+                    event_data = event
+
+                else:
+
+                    event_data = vars(event)
+
                 self.store.save_event(
-                    event
+                    event_data
                 )
 
                 stored_events += 1
@@ -121,24 +123,27 @@ class SentinelEngine:
             except Exception as error:
 
                 print(
-                    f"[!] Event storage error: "
-                    f"{error}"
+                    f"[!] Event storage error: {error}"
                 )
 
         print(
-            f"[+] Events stored in database: "
+            f"[+] Events processed for database: "
             f"{stored_events}"
         )
 
-        # =========================================================
+        # =====================================================
         # 4. DETECTION
-        # =========================================================
+        # =====================================================
 
         alerts = []
 
         try:
 
-            alerts = self.detector.detect(
+            # IMPORTANT:
+            # DetectionManager expects SecurityEvent
+            # objects, NOT dictionaries.
+
+            alerts = self.detection_manager.detect(
                 events
             )
 
@@ -153,9 +158,9 @@ class SentinelEngine:
             f"{len(alerts)}"
         )
 
-        # =========================================================
+        # =====================================================
         # 5. STORE ALERTS
-        # =========================================================
+        # =====================================================
 
         stored_alerts = 0
 
@@ -163,8 +168,26 @@ class SentinelEngine:
 
             try:
 
+                if hasattr(
+                    alert,
+                    "to_dict"
+                ):
+
+                    alert_data = alert.to_dict()
+
+                elif isinstance(
+                    alert,
+                    dict
+                ):
+
+                    alert_data = alert
+
+                else:
+
+                    alert_data = vars(alert)
+
                 self.store.save_alert(
-                    alert
+                    alert_data
                 )
 
                 stored_alerts += 1
@@ -172,28 +195,33 @@ class SentinelEngine:
             except Exception as error:
 
                 print(
-                    f"[!] Alert storage error: "
-                    f"{error}"
+                    f"[!] Alert storage error: {error}"
                 )
 
-        # =========================================================
+        print(
+            f"[+] Alerts processed for database: "
+            f"{stored_alerts}"
+        )
+
+        # =====================================================
         # 6. CORRELATION
-        # =========================================================
+        # =====================================================
 
         incidents = []
 
         try:
 
-            incidents = self.correlation.correlate(
-                alerts,
-                events
+            incidents = (
+                self.correlation_engine.correlate(
+                    alerts,
+                    events
+                )
             )
 
         except Exception as error:
 
             print(
-                f"[!] Correlation error: "
-                f"{error}"
+                f"[!] Correlation error: {error}"
             )
 
         print(
@@ -201,55 +229,24 @@ class SentinelEngine:
             f"{len(incidents)}"
         )
 
-        # =========================================================
-        # 7. INCIDENT INTELLIGENCE
-        #
-        # Adds:
-        # - MITRE ATT&CK
-        # - confidence
-        # - evidence
-        # - richer descriptions
-        # =========================================================
-
-        enriched_incidents = []
-
-        for incident in incidents:
-
-            try:
-
-                incident = self.intelligence.enrich(
-                    incident
-                )
-
-                enriched_incidents.append(
-                    incident
-                )
-
-            except Exception as error:
-
-                print(
-                    f"[!] Intelligence error: "
-                    f"{error}"
-                )
-
-                enriched_incidents.append(
-                    incident
-                )
-
-        incidents = enriched_incidents
-
-        # =========================================================
-        # 8. RISK SCORING
-        # =========================================================
+        # =====================================================
+        # 7. ENRICH INCIDENTS
+        # =====================================================
 
         final_incidents = []
 
         for incident in incidents:
 
+            # -------------------------------------------------
+            # Risk scoring
+            # -------------------------------------------------
+
             try:
 
-                risk = self.risk_engine.calculate_score(
-                    incident
+                risk = (
+                    self.risk_engine.calculate_score(
+                        incident
+                    )
                 )
 
                 incident.update(
@@ -259,83 +256,49 @@ class SentinelEngine:
             except Exception as error:
 
                 print(
-                    f"[!] Risk scoring error: "
+                    f"[!] Risk engine error: {error}"
+                )
+
+            # -------------------------------------------------
+            # Threat intelligence / MITRE enrichment
+            # -------------------------------------------------
+
+            try:
+
+                intelligence = (
+                    self.intelligence.enrich(
+                        incident
+                    )
+                )
+
+                if intelligence:
+
+                    incident[
+                        "intelligence"
+                    ] = intelligence
+
+            except Exception as error:
+
+                print(
+                    f"[!] Intelligence enrichment error: "
                     f"{error}"
                 )
 
-                incident.setdefault(
-                    "risk_score",
-                    0
-                )
-
-                incident.setdefault(
-                    "severity",
-                    "low"
-                )
-
-                incident.setdefault(
-                    "reasons",
-                    []
-                )
-
-            # -----------------------------------------------------
-            # Preserve intelligence information
-            # -----------------------------------------------------
-
-            incident.setdefault(
-                "confidence",
-                50
-            )
-
-            incident.setdefault(
-                "evidence",
-                []
-            )
-
-            incident.setdefault(
-                "mitre",
-                {}
-            )
-
-            # -----------------------------------------------------
-            # Default incident status
-            # -----------------------------------------------------
-
-            incident.setdefault(
-                "status",
-                "open"
-            )
-
-            final_incidents.append(
-                incident
-            )
-
-        # =========================================================
-        # 9. RESPONSE RECOMMENDATIONS
-        # =========================================================
-
-        for incident in final_incidents:
+            # -------------------------------------------------
+            # Response recommendation
+            # -------------------------------------------------
 
             try:
 
                 response = (
-                    self.response_engine
-                    .generate_response(
+                    self.response_engine.generate_response(
                         incident
                     )
                 )
 
                 incident[
-                    "recommended_response"
+                    "response"
                 ] = response
-
-            except AttributeError:
-
-                # Compatibility with an older
-                # ResponseEngine implementation.
-                incident[
-                    "recommended_response"
-                ] = []
 
             except Exception as error:
 
@@ -344,13 +307,13 @@ class SentinelEngine:
                     f"{error}"
                 )
 
-                incident[
-                    "recommended_response"
-                ] = []
+            final_incidents.append(
+                incident
+            )
 
-        # =========================================================
-        # 10. STORE INCIDENTS
-        # =========================================================
+        # =====================================================
+        # 8. STORE INCIDENTS
+        # =====================================================
 
         stored_incidents = 0
 
@@ -365,7 +328,7 @@ class SentinelEngine:
                 )
 
                 incident[
-                    "incident_id"
+                    "id"
                 ] = incident_id
 
                 stored_incidents += 1
@@ -378,17 +341,16 @@ class SentinelEngine:
                 )
 
         print(
-            f"[+] Incidents stored in database: "
+            f"[+] Incidents processed for database: "
             f"{stored_incidents}"
         )
 
-        # =========================================================
-        # 11. DISPLAY INCIDENTS
-        # =========================================================
+        # =====================================================
+        # 9. DISPLAY INCIDENTS
+        # =====================================================
 
         print(
-            "\n"
-            + "=" * 70
+            "\n" + "=" * 65
         )
 
         print(
@@ -396,7 +358,7 @@ class SentinelEngine:
         )
 
         print(
-            "-" * 70
+            "=" * 65
         )
 
         for incident in final_incidents:
@@ -407,22 +369,22 @@ class SentinelEngine:
 
             print(
                 f"Incident ID: "
-                f"{incident.get('incident_id', 'N/A')}"
+                f"{incident.get('id', 'N/A')}"
             )
 
             print(
                 f"Type: "
-                f"{incident.get('incident_type', 'unknown')}"
+                f"{incident.get('incident_type')}"
             )
 
             print(
                 f"Source IP: "
-                f"{incident.get('source_ip', 'N/A')}"
+                f"{incident.get('source_ip')}"
             )
 
             print(
                 f"Username: "
-                f"{incident.get('username', 'N/A')}"
+                f"{incident.get('username')}"
             )
 
             print(
@@ -455,138 +417,66 @@ class SentinelEngine:
                 f"{incident.get('confidence', 0)}%"
             )
 
-            # -----------------------------------------------------
-            # MITRE ATT&CK
-            # -----------------------------------------------------
-
-            mitre = incident.get(
-                "mitre",
-                {}
+            print(
+                f"Attack Types: "
+                f"{incident.get('attack_types', [])}"
             )
 
-            if mitre:
-
-                print(
-                    "\nMITRE ATT&CK:"
-                )
-
-                print(
-                    f"  Technique ID: "
-                    f"{mitre.get('technique_id', 'N/A')}"
-                )
-
-                print(
-                    f"  Technique: "
-                    f"{mitre.get('technique_name', 'N/A')}"
-                )
-
-                print(
-                    f"  Tactic: "
-                    f"{mitre.get('tactic', 'N/A')}"
-                )
-
-            # -----------------------------------------------------
-            # Description
-            # -----------------------------------------------------
-
-            description = incident.get(
-                "description"
+            print(
+                "\nDescription:"
             )
 
-            if description:
+            print(
+                f"  {incident.get('description', '')}"
+            )
 
-                print(
-                    "\nDescription:"
-                )
+            print(
+                "\nReasons:"
+            )
 
-                print(
-                    f"  {description}"
-                )
-
-            # -----------------------------------------------------
-            # Reasons
-            # -----------------------------------------------------
-
-            reasons = incident.get(
+            for reason in incident.get(
                 "reasons",
                 []
-            )
-
-            if reasons:
+            ):
 
                 print(
-                    "\nReasons:"
+                    f"  - {reason}"
                 )
 
-                for reason in reasons:
+            print(
+                "\nEvidence:"
+            )
 
-                    print(
-                        f"  - {reason}"
-                    )
-
-            # -----------------------------------------------------
-            # Evidence
-            # -----------------------------------------------------
-
-            evidence = incident.get(
+            for item in incident.get(
                 "evidence",
                 []
-            )
-
-            if evidence:
+            ):
 
                 print(
-                    "\nEvidence:"
+                    f"  - {item}"
                 )
 
-                for item in evidence:
-
-                    print(
-                        f"  - {item}"
-                    )
-
-            # -----------------------------------------------------
-            # Recommended response
-            # -----------------------------------------------------
-
-            response = incident.get(
-                "recommended_response",
-                []
+            print(
+                "\nRecommended Response:"
             )
 
-            if response:
-
-                print(
-                    "\nRecommended Response:"
+            print(
+                incident.get(
+                    "response",
+                    {}
                 )
-
-                if isinstance(
-                    response,
-                    list
-                ):
-
-                    for index, action in enumerate(
-                        response,
-                        start=1
-                    ):
-
-                        print(
-                            f"  {index}. {action}"
-                        )
-
-                else:
-
-                    print(
-                        f"  {response}"
-                    )
+            )
 
         print(
-            "\n"
-            + "=" * 70
+            "\n" + "=" * 65
         )
 
         return final_incidents
 
+
+# =============================================================
+# MAIN
+# =============================================================
 
 if __name__ == "__main__":
 
