@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>SentinelSOC Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- SIDEBAR -->
+
+        <aside class="sidebar">
+
+            <div class="brand">
+
+                <div class="brand-icon">
+                    S
+                </div>
+
+                <div>
+                    <h1>SentinelSOC</h1>
+                    <span>Security Operations Center</span>
+                </div>
+
+            </div>
+
+
+            <nav>
+
+                <a
+                    href="#"
+                    class="nav-item active"
+                >
+                    <span>▦</span>
+                    Dashboard
+                </a>
+
+                <a
+                    href="#incidents"
+                    class="nav-item"
+                >
+                    <span>⚠</span>
+                    Incidents
+                </a>
+
+                <a
+                    href="#events"
+                    class="nav-item"
+                >
+                    <span>◉</span>
+                    Events
+                </a>
+
+                <a
+                    href="#alerts"
+                    class="nav-item"
+                >
+                    <span>!</span>
+                    Alerts
+                </a>
+
+            </nav>
+
+
+            <div class="sidebar-bottom">
+
+                <div class="api-status">
+
+                    <span
+                        id="statusDot"
+                        class="status-dot"
+                    ></span>
+
+                    <div>
+
+                        <strong>API Status</strong>
+
+                        <small id="apiStatus">
+                            Checking...
+                        </small>
+
+                    </div>
+
+                </div>
+
+                <div class="version">
+                    SentinelSOC v1.0.0
+                </div>
+
+            </div>
+
+        </aside>
+
+
+        <!-- MAIN -->
+
+        <main class="main">
+
+            <header class="topbar">
+
+                <div>
+
+                    <h2>
+                        Security Operations Dashboard
+                    </h2>
+
+                    <p>
+                        Real-time security monitoring and
+                        incident management
+                    </p>
+
+                </div>
+
+
+                <div class="topbar-actions">
+
+                    <span
+                        id="lastUpdated"
+                        class="last-updated"
+                    >
+                        Last updated: --
+                    </span>
+
+                    <button
+                        class="refresh-btn"
+                        onclick="loadDashboard()"
+                    >
+                        ↻ Refresh
+                    </button>
+
+                </div>
+
+            </header>
+
+
+            <!-- STAT CARDS -->
+
+            <section class="stats-grid">
+
+                <div class="stat-card">
+
+                    <div class="stat-icon events">
+                        ◉
+                    </div>
+
+                    <div>
+
+                        <span>Total Events</span>
+
+                        <strong id="totalEvents">
+                            0
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon alerts">
+                        !
+                    </div>
+
+                    <div>
+
+                        <span>Total Alerts</span>
+
+                        <strong id="totalAlerts">
+                            0
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon incidents">
+                        ⚠
+                    </div>
+
+                    <div>
+
+                        <span>Total Incidents</span>
+
+                        <strong id="totalIncidents">
+                            0
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon open">
+                        ◌
+                    </div>
+
+                    <div>
+
+                        <span>Open Incidents</span>
+
+                        <strong id="openIncidents">
+                            0
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- SEVERITY -->
+
+            <section class="content-grid">
+
+                <div class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <h3>
+                                Incident Severity
+                            </h3>
+
+                            <span>
+                                Current incident distribution
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="severity-list">
+
+                        <div class="severity-row">
+
+                            <div class="severity-label">
+                                <span class="severity-dot critical"></span>
+                                Critical
+                            </div>
+
+                            <strong id="criticalCount">
+                                0
+                            </strong>
+
+                            <div class="bar">
+                                <div
+                                    id="criticalBar"
+                                    class="bar-fill critical"
+                                ></div>
+                            </div>
+
+                        </div>
+
+
+                        <div class="severity-row">
+
+                            <div class="severity-label">
+                                <span class="severity-dot high"></span>
+                                High
+                            </div>
+
+                            <strong id="highCount">
+                                0
+                            </strong>
+
+                            <div class="bar">
+                                <div
+                                    id="highBar"
+                                    class="bar-fill high"
+                                ></div>
+                            </div>
+
+                        </div>
+
+
+                        <div class="severity-row">
+
+                            <div class="severity-label">
+                                <span class="severity-dot medium"></span>
+                                Medium
+                            </div>
+
+                            <strong id="mediumCount">
+                                0
+                            </strong>
+
+                            <div class="bar">
+                                <div
+                                    id="mediumBar"
+                                    class="bar-fill medium"
+                                ></div>
+                            </div>
+
+                        </div>
+
+
+                        <div class="severity-row">
+
+                            <div class="severity-label">
+                                <span class="severity-dot low"></span>
+                                Low
+                            </div>
+
+                            <strong id="lowCount">
+                                0
+                            </strong>
+
+                            <div class="bar">
+                                <div
+                                    id="lowBar"
+                                    class="bar-fill low"
+                                ></div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- ATTACK TYPES -->
+
+                <div class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <h3>
+                                Attack Types
+                            </h3>
+
+                            <span>
+                                Detected incident categories
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="attackTypes"
+                        class="attack-types"
+                    >
+
+                        <div class="empty">
+                            No incidents available
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- INCIDENTS -->
+
+            <section
+                id="incidents"
+                class="panel incidents-panel"
+            >
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h3>
+                            Security Incidents
+                        </h3>
+
+                        <span>
+                            Latest correlated security incidents
+                        </span>
+
+                    </div>
+
+                    <button
+                        class="small-btn"
+                        onclick="loadIncidents()"
+                    >
+                        Refresh
+                    </button>
+
+                </div>
+
+
+                <div class="table-container">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>ID</th>
+
+                                <th>Type</th>
+
+                                <th>Severity</th>
+
+                                <th>Risk</th>
+
+                                <th>Source IP</th>
+
+                                <th>Username</th>
+
+                                <th>Status</th>
+
+                                <th>Created</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="incidentTable">
+
+                            <tr>
+
+                                <td
+                                    colspan="8"
+                                    class="loading"
+                                >
+                                    Loading incidents...
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+
+
+            <!-- EVENTS -->
+
+            <section
+                id="events"
+                class="panel"
+            >
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h3>
+                            Recent Security Events
+                        </h3>
+
+                        <span>
+                            Latest telemetry received by SentinelSOC
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-container">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>ID</th>
+
+                                <th>Timestamp</th>
+
+                                <th>Source</th>
+
+                                <th>Event Type</th>
+
+                                <th>Severity</th>
+
+                                <th>Source IP</th>
+
+                                <th>Destination</th>
+
+                                <th>Protocol</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="eventTable">
+
+                            <tr>
+
+                                <td
+                                    colspan="8"
+                                    class="loading"
+                                >
+                                    Loading events...
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+
+
+            <!-- ALERTS -->
+
+            <section
+                id="alerts"
+                class="panel"
+            >
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <h3>
+                            Detection Alerts
+                        </h3>
+
+                        <span>
+                            Alerts generated by detection engines
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-container">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>ID</th>
+
+                                <th>Type</th>
+
+                                <th>Severity</th>
+
+                                <th>Source IP</th>
+
+                                <th>Username</th>
+
+                                <th>Description</th>
+
+                                <th>Created</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="alertTable">
+
+                            <tr>
+
+                                <td
+                                    colspan="7"
+                                    class="loading"
+                                >
+                                    Loading alerts...
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+
+
+            <footer>
+
+                <span>
+                    SentinelSOC — Unified Security Operations Platform
+                </span>
+
+                <span>
+                    API: 127.0.0.1:8000
+                </span>
+
+            </footer>
+
+        </main>
+
+    </div>
+
+
+    <!-- INCIDENT MODAL -->
+
+    <div
+        id="incidentModal"
+        class="modal hidden"
+    >
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h3>
+                    Incident Details
+                </h3>
+
+                <button
+                    onclick="closeModal()"
+                    class="close-btn"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <div id="incidentDetails"></div>
+
+        </div>
+
+    </div>
+
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
