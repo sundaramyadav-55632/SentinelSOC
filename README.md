@@ -374,6 +374,20 @@ The dashboard provides visibility into:
 
 The dashboard is designed to provide a simplified analyst-facing view of the detection pipeline.
 
+
+## 📸 Screenshots
+
+### SOC Dashboard
+
+![SentinelSOC Dashboard](docs/screenshots/dashboard.png)
+
+### FastAPI Security API
+
+![FastAPI API Documentation](docs/screenshots/api-docs.png)
+
+### Detection Engine
+
+![SentinelSOC Detection Engine](docs/screenshots/detection-engine.png)
 ---
 
 # 🧪 Attack-Chain Demonstration
