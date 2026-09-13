@@ -16,4 +16,6 @@ logs/*
 
 # OS
 .DS_Store
-Thumbs.db data/*.db
+Thumbs.db
+# Database
+data/*.db
