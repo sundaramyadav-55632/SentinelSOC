@@ -1,23 +1,29 @@
+import os
 import sqlite3
-from pathlib import Path
-
-
-DATABASE_PATH = Path("data/sentinelsoc.db")
 
 
 class Database:
 
-    def __init__(self, database_path=DATABASE_PATH):
+    def __init__(
+        self,
+        database_path="data/sentinelsoc.db"
+    ):
 
         self.database_path = database_path
 
-        self.database_path.parent.mkdir(
-            parents=True,
-            exist_ok=True
+        directory = os.path.dirname(
+            self.database_path
         )
 
+        if directory:
+            os.makedirs(
+                directory,
+                exist_ok=True
+            )
+
         self.connection = sqlite3.connect(
-            self.database_path
+            self.database_path,
+            check_same_thread=False
         )
 
         self.connection.row_factory = sqlite3.Row
@@ -28,7 +34,8 @@ class Database:
 
         cursor = self.connection.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS events (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,8 +48,6 @@ class Database:
 
                 severity TEXT,
 
-                username TEXT,
-
                 source_ip TEXT,
 
                 source_port INTEGER,
@@ -53,69 +58,74 @@ class Database:
 
                 protocol TEXT,
 
+                username TEXT,
+
                 action TEXT,
 
-                message TEXT,
+                raw_log TEXT,
 
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
 
-        cursor.execute("""
+            )
+            """
+        )
+
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS alerts (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
                 alert_type TEXT,
 
+                severity TEXT,
+
                 source_ip TEXT,
 
                 username TEXT,
 
-                failed_attempts INTEGER,
+                description TEXT,
 
-                unique_users INTEGER,
-
-                unique_ports INTEGER,
-
-                window_seconds INTEGER,
-
-                severity TEXT,
+                evidence TEXT,
 
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
 
-        cursor.execute("""
+            )
+            """
+        )
+
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS incidents (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
                 incident_type TEXT,
 
+                severity TEXT,
+
+                risk_score INTEGER,
+
+                status TEXT DEFAULT 'open',
+
                 source_ip TEXT,
 
                 username TEXT,
 
-                failed_attempts INTEGER,
+                description TEXT,
 
-                unique_users INTEGER,
-
-                unique_ports INTEGER,
-
-                risk_score INTEGER,
-
-                severity TEXT,
-
-                status TEXT DEFAULT 'open',
+                evidence TEXT,
 
                 reasons TEXT,
 
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
 
-        cursor.execute("""
+            )
+            """
+        )
+
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS response_actions (
 
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,17 +134,25 @@ class Database:
 
                 action TEXT,
 
-                action_order INTEGER,
+                status TEXT,
+
+                description TEXT,
 
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
-                FOREIGN KEY (incident_id)
-                    REFERENCES incidents(id)
+                FOREIGN KEY (
+                    incident_id
+                )
+                REFERENCES incidents(id)
+
             )
-        """)
+            """
+        )
 
         self.connection.commit()
 
     def close(self):
 
-        self.connection.close()
+        if self.connection:
+
+            self.connection.close()
