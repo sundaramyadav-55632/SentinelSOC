@@ -4,13 +4,16 @@ from src.detectors.detection_manager import DetectionManager
 from src.correlation.correlation_engine import CorrelationEngine
 from src.risk.risk_engine import RiskEngine
 from src.response.response_engine import ResponseEngine
+from src.database.incident_store import IncidentStore
 
 
 class SentinelEngine:
 
     def __init__(self, input_files):
 
-        self.collector = MultiSourceCollector(input_files)
+        self.collector = MultiSourceCollector(
+            input_files
+        )
 
         self.parser_router = ParserRouter()
 
@@ -24,13 +27,17 @@ class SentinelEngine:
 
         self.response_engine = ResponseEngine()
 
+        self.incident_store = IncidentStore()
+
     def run(self):
 
         print("=" * 70)
         print("SENTINELSOC UNIFIED SECURITY OPERATIONS ENGINE")
         print("=" * 70)
 
+        # --------------------------------------------------
         # 1. COLLECT
+        # --------------------------------------------------
 
         raw_logs = self.collector.collect()
 
@@ -38,7 +45,9 @@ class SentinelEngine:
             f"\n[+] Collected logs: {len(raw_logs)}"
         )
 
+        # --------------------------------------------------
         # 2. PARSE
+        # --------------------------------------------------
 
         events = []
 
@@ -53,15 +62,46 @@ class SentinelEngine:
             f"[+] Parsed security events: {len(events)}"
         )
 
-        # 3. DETECT
+        # --------------------------------------------------
+        # 3. SAVE EVENTS
+        # --------------------------------------------------
 
-        alerts = self.detection_manager.detect(events)
+        for event in events:
+
+            self.incident_store.save_event(
+                event
+            )
+
+        print(
+            f"[+] Events stored in database: "
+            f"{len(events)}"
+        )
+
+        # --------------------------------------------------
+        # 4. DETECT
+        # --------------------------------------------------
+
+        alerts = self.detection_manager.detect(
+            events
+        )
 
         print(
             f"[+] Detection alerts: {len(alerts)}"
         )
 
-        # 4. CORRELATE
+        # --------------------------------------------------
+        # 5. SAVE ALERTS
+        # --------------------------------------------------
+
+        for alert in alerts:
+
+            self.incident_store.save_alert(
+                alert
+            )
+
+        # --------------------------------------------------
+        # 6. CORRELATE
+        # --------------------------------------------------
 
         incidents = self.correlation.correlate(
             events,
@@ -69,10 +109,13 @@ class SentinelEngine:
         )
 
         print(
-            f"[+] Correlated incidents: {len(incidents)}"
+            f"[+] Correlated incidents: "
+            f"{len(incidents)}"
         )
 
-        # 5. RISK + RESPONSE
+        # --------------------------------------------------
+        # 7. RISK + RESPONSE + DATABASE
+        # --------------------------------------------------
 
         final_incidents = []
 
@@ -100,11 +143,28 @@ class SentinelEngine:
                 []
             )
 
+            incident_id = (
+                self.incident_store.save_incident(
+                    final_incident
+                )
+            )
+
+            final_incident[
+                "id"
+            ] = incident_id
+
             final_incidents.append(
                 final_incident
             )
 
-        # 6. DISPLAY
+        print(
+            f"[+] Incidents stored in database: "
+            f"{len(final_incidents)}"
+        )
+
+        # --------------------------------------------------
+        # 8. DISPLAY
+        # --------------------------------------------------
 
         print("\n" + "=" * 70)
         print("SECURITY INCIDENTS")
@@ -112,11 +172,20 @@ class SentinelEngine:
 
         if not final_incidents:
 
-            print("\nNo security incidents detected.")
+            print(
+                "\nNo security incidents detected."
+            )
 
         for incident in final_incidents:
 
-            print("\n🚨 INCIDENT DETECTED")
+            print(
+                "\n🚨 INCIDENT DETECTED"
+            )
+
+            print(
+                f"Incident ID: "
+                f"{incident.get('id')}"
+            )
 
             print(
                 f"Type: "
@@ -165,9 +234,13 @@ class SentinelEngine:
                 []
             ):
 
-                print(f"  - {reason}")
+                print(
+                    f"  - {reason}"
+                )
 
-            print("\nRecommended Response:")
+            print(
+                "\nRecommended Response:"
+            )
 
             for number, action in enumerate(
                 incident.get(
