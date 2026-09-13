@@ -1,16 +1,18 @@
-from src.collector.log_collector import LogCollector
-from src.parser.linux_auth_parser import LinuxAuthParser
+from src.collector.multi_source_collector import MultiSourceCollector
+from src.parser.parser_router import ParserRouter
 from src.detectors.detection_manager import DetectionManager
 from src.correlation.correlation_engine import CorrelationEngine
 from src.risk.risk_engine import RiskEngine
+from src.response.response_engine import ResponseEngine
 
 
 class SentinelEngine:
 
-    def __init__(self, input_file):
+    def __init__(self, input_files):
 
-        self.collector = LogCollector(input_file)
-        self.parser = LinuxAuthParser()
+        self.collector = MultiSourceCollector(input_files)
+
+        self.parser_router = ParserRouter()
 
         self.detection_manager = DetectionManager()
 
@@ -20,43 +22,58 @@ class SentinelEngine:
 
         self.risk_engine = RiskEngine()
 
+        self.response_engine = ResponseEngine()
+
     def run(self):
 
-        print("=" * 60)
-        print("SENTINELSOC SECURITY OPERATIONS ENGINE")
-        print("=" * 60)
+        print("=" * 70)
+        print("SENTINELSOC UNIFIED SECURITY OPERATIONS ENGINE")
+        print("=" * 70)
 
-        # 1. Collect logs
+        # 1. COLLECT
+
         raw_logs = self.collector.collect()
 
-        print(f"\n[+] Collected logs: {len(raw_logs)}")
+        print(
+            f"\n[+] Collected logs: {len(raw_logs)}"
+        )
 
-        # 2. Parse logs
+        # 2. PARSE
+
         events = []
 
         for log in raw_logs:
 
-            event = self.parser.parse(log)
+            event = self.parser_router.parse(log)
 
             if event:
                 events.append(event)
 
-        print(f"[+] Parsed security events: {len(events)}")
+        print(
+            f"[+] Parsed security events: {len(events)}"
+        )
 
-        # 3. Detect attacks
+        # 3. DETECT
+
         alerts = self.detection_manager.detect(events)
 
-        print(f"[+] Detection alerts: {len(alerts)}")
+        print(
+            f"[+] Detection alerts: {len(alerts)}"
+        )
 
-        # 4. Correlate events
+        # 4. CORRELATE
+
         incidents = self.correlation.correlate(
             events,
             alerts
         )
 
-        print(f"[+] Correlated incidents: {len(incidents)}")
+        print(
+            f"[+] Correlated incidents: {len(incidents)}"
+        )
 
-        # 5. Calculate risk
+        # 5. RISK + RESPONSE
+
         final_incidents = []
 
         for incident in incidents:
@@ -70,51 +87,99 @@ class SentinelEngine:
                 **risk
             }
 
+            response = (
+                self.response_engine.generate_response(
+                    final_incident
+                )
+            )
+
+            final_incident[
+                "recommended_actions"
+            ] = response.get(
+                "recommended_actions",
+                []
+            )
+
             final_incidents.append(
                 final_incident
             )
 
-        # 6. Display incidents
-        print("\n" + "=" * 60)
+        # 6. DISPLAY
+
+        print("\n" + "=" * 70)
         print("SECURITY INCIDENTS")
-        print("=" * 60)
+        print("=" * 70)
+
+        if not final_incidents:
+
+            print("\nNo security incidents detected.")
 
         for incident in final_incidents:
 
             print("\n🚨 INCIDENT DETECTED")
 
             print(
-                f"Type: {incident['incident_type']}"
+                f"Type: "
+                f"{incident.get('incident_type', 'unknown')}"
             )
 
             print(
-                f"Source IP: {incident['source_ip']}"
+                f"Source IP: "
+                f"{incident.get('source_ip', 'N/A')}"
             )
 
             print(
-                f"Username: {incident['username']}"
+                f"Username: "
+                f"{incident.get('username', 'N/A')}"
             )
 
             print(
                 f"Failed Attempts: "
-                f"{incident['failed_attempts']}"
+                f"{incident.get('failed_attempts', 0)}"
+            )
+
+            print(
+                f"Unique Users: "
+                f"{incident.get('unique_users', 0)}"
+            )
+
+            print(
+                f"Unique Ports: "
+                f"{incident.get('unique_ports', 0)}"
             )
 
             print(
                 f"Risk Score: "
-                f"{incident['risk_score']}/100"
+                f"{incident.get('risk_score', 0)}/100"
             )
 
             print(
                 f"Severity: "
-                f"{incident['severity'].upper()}"
+                f"{incident.get('severity', 'low').upper()}"
             )
 
             print("\nReasons:")
 
-            for reason in incident["reasons"]:
+            for reason in incident.get(
+                "reasons",
+                []
+            ):
 
                 print(f"  - {reason}")
+
+            print("\nRecommended Response:")
+
+            for number, action in enumerate(
+                incident.get(
+                    "recommended_actions",
+                    []
+                ),
+                start=1
+            ):
+
+                print(
+                    f"  {number}. {action}"
+                )
 
         return final_incidents
 
@@ -122,7 +187,10 @@ class SentinelEngine:
 if __name__ == "__main__":
 
     engine = SentinelEngine(
-        "data/samples/auth.log"
+        [
+            "data/samples/auth.log",
+            "data/samples/port_scan.log"
+        ]
     )
 
     engine.run()
