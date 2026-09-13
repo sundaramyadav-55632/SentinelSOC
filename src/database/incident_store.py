@@ -1,60 +1,116 @@
 import json
-from datetime import datetime
 
 from src.database.database import Database
 
 
 class IncidentStore:
 
-    def __init__(
-        self,
-        database=None
-    ):
+    ALLOWED_STATUSES = {
+        "open",
+        "investigating",
+        "contained",
+        "resolved",
+        "false_positive"
+    }
+
+    def __init__(self, database=None):
 
         self.database = (
             database
-            if database
+            if database is not None
             else Database()
         )
 
+    # =========================================================
+    # HELPER
+    # =========================================================
+
+    @staticmethod
+    def _to_dict(value):
+
+        if hasattr(value, "to_dict"):
+            return value.to_dict()
+
+        if isinstance(value, dict):
+            return value
+
+        return vars(value)
 
     # =========================================================
-    # EVENTS
+    # EVENT DEDUPLICATION KEY
     # =========================================================
 
-    def save_event(
-        self,
-        event
-    ):
+    @staticmethod
+    def _event_key(event):
 
-        cursor = (
-            self.database.connection.cursor()
+        return (
+            event.get("timestamp"),
+            event.get("source"),
+            event.get("event_type"),
+            event.get("severity"),
+            event.get("username"),
+            event.get("source_ip"),
+            event.get("source_port"),
+            event.get("destination_ip"),
+            event.get("destination_port"),
+            event.get("protocol"),
+            event.get("action"),
+            event.get("message")
         )
 
+    # =========================================================
+    # CHECK EXISTING EVENT
+    # =========================================================
 
-        def get_value(
-            key,
-            default=None
-        ):
+    def _find_existing_event(self, event):
 
-            if isinstance(event, dict):
+        key = self._event_key(event)
 
-                return event.get(
-                    key,
-                    default
-                )
+        cursor = self.database.connection.cursor()
 
-            return getattr(
-                event,
-                key,
-                default
-            )
+        rows = cursor.execute(
+            """
+            SELECT *
+            FROM events
+            ORDER BY id DESC
+            """
+        ).fetchall()
 
+        for row in rows:
+
+            existing = dict(row)
+
+            if self._event_key(existing) == key:
+
+                return existing
+
+        return None
+
+    # =========================================================
+    # SAVE EVENT
+    # =========================================================
+
+    def save_event(self, event):
+
+        event = self._to_dict(event)
+
+        # -----------------------------------------------------
+        # Prevent duplicate events
+        # -----------------------------------------------------
+
+        existing = self._find_existing_event(
+            event
+        )
+
+        if existing:
+
+            return existing["id"]
+
+        cursor = self.database.connection.cursor()
 
         cursor.execute(
             """
             INSERT INTO events (
-
                 timestamp,
                 source,
                 event_type,
@@ -66,82 +122,116 @@ class IncidentStore:
                 destination_port,
                 protocol,
                 action,
-                message
-
+                message,
+                raw_log
             )
-
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                get_value("timestamp"),
-
-                get_value("source"),
-
-                get_value("event_type"),
-
-                get_value("severity"),
-
-                get_value("username"),
-
-                get_value("source_ip"),
-
-                get_value("source_port"),
-
-                get_value("destination_ip"),
-
-                get_value("destination_port"),
-
-                get_value("protocol"),
-
-                get_value("action"),
-
-                get_value("message")
+                event.get("timestamp"),
+                event.get("source"),
+                event.get("event_type"),
+                event.get("severity"),
+                event.get("username"),
+                event.get("source_ip"),
+                event.get("source_port"),
+                event.get("destination_ip"),
+                event.get("destination_port"),
+                event.get("protocol"),
+                event.get("action"),
+                event.get("message"),
+                event.get(
+                    "raw_log",
+                    event.get("message")
+                )
             )
         )
-
 
         self.database.connection.commit()
 
         return cursor.lastrowid
 
-
     # =========================================================
-    # ALERTS
+    # ALERT DEDUPLICATION KEY
     # =========================================================
 
-    def save_alert(
-        self,
-        alert
-    ):
+    @staticmethod
+    def _alert_key(alert):
 
-        cursor = (
-            self.database.connection.cursor()
+        return (
+            alert.get(
+                "alert_type",
+                alert.get("incident_type")
+            ),
+            alert.get(
+                "incident_type"
+            ),
+            alert.get("severity"),
+            alert.get("source_ip"),
+            alert.get("username"),
+            alert.get("failed_attempts", 0),
+            alert.get("unique_users", 0),
+            alert.get("unique_ports", 0),
+            alert.get("confidence", 0),
+            alert.get(
+                "message",
+                alert.get("description")
+            )
         )
 
+    # =========================================================
+    # CHECK EXISTING ALERT
+    # =========================================================
 
-        def get_value(
-            key,
-            default=None
-        ):
+    def _find_existing_alert(self, alert):
 
-            if isinstance(alert, dict):
+        key = self._alert_key(alert)
 
-                return alert.get(
-                    key,
-                    default
-                )
+        cursor = self.database.connection.cursor()
 
-            return getattr(
-                alert,
-                key,
-                default
-            )
+        rows = cursor.execute(
+            """
+            SELECT *
+            FROM alerts
+            ORDER BY id DESC
+            """
+        ).fetchall()
 
+        for row in rows:
+
+            existing = dict(row)
+
+            if self._alert_key(existing) == key:
+
+                return existing
+
+        return None
+
+    # =========================================================
+    # SAVE ALERT
+    # =========================================================
+
+    def save_alert(self, alert):
+
+        alert = self._to_dict(alert)
+
+        # -----------------------------------------------------
+        # Prevent duplicate alerts
+        # -----------------------------------------------------
+
+        existing = self._find_existing_alert(
+            alert
+        )
+
+        if existing:
+
+            return existing["id"]
+
+        cursor = self.database.connection.cursor()
 
         cursor.execute(
             """
             INSERT INTO alerts (
-
                 alert_type,
                 incident_type,
                 severity,
@@ -151,623 +241,341 @@ class IncidentStore:
                 unique_users,
                 unique_ports,
                 confidence,
-                message
-
+                message,
+                created_at
             )
-
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                get_value(
+                alert.get(
                     "alert_type",
-                    get_value(
-                        "incident_type"
-                    )
+                    alert.get("incident_type")
                 ),
 
-                get_value(
-                    "incident_type"
+                alert.get(
+                    "incident_type",
+                    alert.get("alert_type")
                 ),
 
-                get_value(
-                    "severity",
-                    "low"
+                alert.get(
+                    "severity"
                 ),
 
-                get_value(
+                alert.get(
                     "source_ip"
                 ),
 
-                get_value(
+                alert.get(
                     "username"
                 ),
 
-                get_value(
+                alert.get(
                     "failed_attempts",
                     0
                 ),
 
-                get_value(
+                alert.get(
                     "unique_users",
                     0
                 ),
 
-                get_value(
+                alert.get(
                     "unique_ports",
                     0
                 ),
 
-                get_value(
+                alert.get(
                     "confidence",
                     0
                 ),
 
-                get_value(
+                alert.get(
                     "message",
-                    ""
+                    alert.get("description")
+                ),
+
+                alert.get(
+                    "created_at"
                 )
             )
         )
-
 
         self.database.connection.commit()
 
         return cursor.lastrowid
 
-
     # =========================================================
-    # INCIDENTS
-    # =========================================================
-
-    def save_incident(
-        self,
-        incident
-    ):
-
-        cursor = (
-            self.database.connection.cursor()
-        )
-
-
-        def get_value(
-            key,
-            default=None
-        ):
-
-            if isinstance(incident, dict):
-
-                return incident.get(
-                    key,
-                    default
-                )
-
-            return getattr(
-                incident,
-                key,
-                default
-            )
-
-
-        incident_type = get_value(
-            "incident_type",
-            get_value(
-                "alert_type",
-                "unknown"
-            )
-        )
-
-
-        severity = get_value(
-            "severity",
-            "low"
-        )
-
-
-        risk_score = get_value(
-            "risk_score",
-            0
-        )
-
-
-        confidence = get_value(
-            "confidence",
-            0
-        )
-
-
-        source_ip = get_value(
-            "source_ip"
-        )
-
-
-        username = get_value(
-            "username"
-        )
-
-
-        failed_attempts = get_value(
-            "failed_attempts",
-            0
-        )
-
-
-        unique_users = get_value(
-            "unique_users",
-            0
-        )
-
-
-        unique_ports = get_value(
-            "unique_ports",
-            0
-        )
-
-
-        successful_login = get_value(
-            "successful_login",
-            False
-        )
-
-
-        status = get_value(
-            "status",
-            "open"
-        )
-
-
-        description = get_value(
-            "description",
-            ""
-        )
-
-
-        reasons = get_value(
-            "reasons",
-            []
-        )
-
-
-        evidence = get_value(
-            "evidence",
-            []
-        )
-
-
-        recommended_response = get_value(
-            "recommended_response",
-            []
-        )
-
-
-        mitre = get_value(
-            "mitre",
-            {}
-        )
-
-
-        if mitre is None:
-
-            mitre = {}
-
-
-        if not isinstance(
-            mitre,
-            dict
-        ):
-
-            mitre = {}
-
-
-        mitre_technique_id = (
-            mitre.get(
-                "technique_id"
-            )
-        )
-
-
-        mitre_technique_name = (
-            mitre.get(
-                "technique_name"
-            )
-        )
-
-
-        mitre_tactic = (
-            mitre.get(
-                "tactic"
-            )
-        )
-
-
-        mitre_description = (
-            mitre.get(
-                "description"
-            )
-        )
-
-
-        # -----------------------------------------------------
-        # Convert complex fields into JSON strings
-        # -----------------------------------------------------
-
-        reasons_json = json.dumps(
-            reasons,
-            default=str
-        )
-
-
-        evidence_json = json.dumps(
-            evidence,
-            default=str
-        )
-
-
-        response_json = json.dumps(
-            recommended_response,
-            default=str
-        )
-
-
-        now = datetime.now().isoformat(
-            timespec="seconds"
-        )
-
-
-        cursor.execute(
-            """
-            INSERT INTO incidents (
-
-                incident_type,
-                severity,
-                risk_score,
-                confidence,
-
-                source_ip,
-                username,
-
-                failed_attempts,
-                unique_users,
-                unique_ports,
-
-                successful_login,
-
-                status,
-
-                description,
-
-                reasons,
-                evidence,
-
-                recommended_response,
-
-                mitre_technique_id,
-                mitre_technique_name,
-                mitre_tactic,
-                mitre_description,
-
-                created_at,
-                updated_at
-
-            )
-
-            VALUES (
-
-                ?, ?, ?, ?,
-                ?, ?,
-                ?, ?, ?,
-                ?,
-                ?,
-                ?,
-                ?, ?,
-                ?,
-                ?, ?, ?, ?,
-                ?, ?
-
-            )
-            """,
-            (
-                incident_type,
-                severity,
-                risk_score,
-                confidence,
-
-                source_ip,
-                username,
-
-                failed_attempts,
-                unique_users,
-                unique_ports,
-
-                int(
-                    bool(
-                        successful_login
-                    )
-                ),
-
-                status,
-
-                description,
-
-                reasons_json,
-                evidence_json,
-
-                response_json,
-
-                mitre_technique_id,
-                mitre_technique_name,
-                mitre_tactic,
-                mitre_description,
-
-                now,
-                now
-            )
-        )
-
-
-        incident_id = (
-            cursor.lastrowid
-        )
-
-
-        # -----------------------------------------------------
-        # Save recommended response actions
-        # -----------------------------------------------------
-
-        if isinstance(
-            recommended_response,
-            dict
-        ):
-
-            actions = (
-                recommended_response.get(
-                    "recommended_actions",
-                    []
-                )
-            )
-
-        elif isinstance(
-            recommended_response,
-            list
-        ):
-
-            actions = (
-                recommended_response
-            )
-
-        else:
-
-            actions = []
-
-
-        for action in actions:
-
-            cursor.execute(
-                """
-                INSERT INTO response_actions (
-
-                    incident_id,
-                    action,
-                    status
-
-                )
-
-                VALUES (?, ?, ?)
-                """,
-                (
-                    incident_id,
-                    str(action),
-                    "recommended"
-                )
-            )
-
-
-        self.database.connection.commit()
-
-
-        return incident_id
-
-
-    # =========================================================
-    # GET INCIDENTS
+    # INCIDENT DEDUPLICATION KEY
     # =========================================================
 
-    def get_incidents(self):
+    @staticmethod
+    def _incident_key(incident):
 
-        cursor = (
-            self.database.connection.cursor()
+        return (
+            incident.get("incident_type"),
+            incident.get("source_ip"),
+            incident.get("username"),
+            incident.get("failed_attempts", 0),
+            incident.get("unique_users", 0),
+            incident.get("unique_ports", 0),
+            incident.get("risk_score", 0),
+            incident.get("severity"),
+            incident.get("description")
         )
 
+    # =========================================================
+    # CHECK EXISTING INCIDENT
+    # =========================================================
 
-        cursor.execute(
+    def _find_existing_incident(self, incident):
+
+        key = self._incident_key(
+            incident
+        )
+
+        cursor = self.database.connection.cursor()
+
+        rows = cursor.execute(
             """
             SELECT *
             FROM incidents
             ORDER BY id DESC
             """
-        )
+        ).fetchall()
 
+        for row in rows:
 
-        rows = cursor.fetchall()
+            existing = dict(row)
 
+            if self._incident_key(
+                existing
+            ) == key:
 
-        return [
-            self._incident_from_row(
-                row
-            )
-            for row in rows
-        ]
+                return existing
 
+        return None
 
     # =========================================================
-    # GET ONE INCIDENT
+    # SAVE INCIDENT
     # =========================================================
 
-    def get_incident(
-        self,
-        incident_id
-    ):
+    def save_incident(self, incident):
 
-        cursor = (
-            self.database.connection.cursor()
+        incident = self._to_dict(
+            incident
         )
 
+        # -----------------------------------------------------
+        # Prevent duplicate incidents
+        # -----------------------------------------------------
+
+        existing = self._find_existing_incident(
+            incident
+        )
+
+        if existing:
+
+            return existing["id"]
+
+        cursor = self.database.connection.cursor()
+
+        reasons = incident.get(
+            "reasons",
+            []
+        )
+
+        evidence = incident.get(
+            "evidence",
+            []
+        )
+
+        mitre = incident.get(
+            "mitre",
+            {}
+        )
+
+        if not isinstance(
+            mitre,
+            dict
+        ):
+            mitre = {}
+
+        # -----------------------------------------------------
+        # Insert incident
+        # -----------------------------------------------------
 
         cursor.execute(
             """
-            SELECT *
-            FROM incidents
-            WHERE id = ?
+            INSERT INTO incidents (
+                incident_type,
+                source_ip,
+                username,
+                failed_attempts,
+                unique_users,
+                unique_ports,
+                risk_score,
+                severity,
+                status,
+                reasons,
+                created_at,
+                confidence,
+                successful_login,
+                description,
+                evidence,
+                mitre_technique_id,
+                mitre_technique_name,
+                mitre_tactic,
+                mitre_description
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                incident_id,
+                incident.get(
+                    "incident_type"
+                ),
+
+                incident.get(
+                    "source_ip"
+                ),
+
+                incident.get(
+                    "username"
+                ),
+
+                incident.get(
+                    "failed_attempts",
+                    0
+                ),
+
+                incident.get(
+                    "unique_users",
+                    0
+                ),
+
+                incident.get(
+                    "unique_ports",
+                    0
+                ),
+
+                incident.get(
+                    "risk_score",
+                    0
+                ),
+
+                incident.get(
+                    "severity",
+                    "low"
+                ),
+
+                incident.get(
+                    "status",
+                    "open"
+                ),
+
+                json.dumps(
+                    reasons
+                ),
+
+                incident.get(
+                    "created_at"
+                ),
+
+                incident.get(
+                    "confidence",
+                    0
+                ),
+
+                int(
+                    bool(
+                        incident.get(
+                            "successful_login",
+                            False
+                        )
+                    )
+                ),
+
+                incident.get(
+                    "description"
+                ),
+
+                json.dumps(
+                    evidence
+                ),
+
+                mitre.get(
+                    "technique_id"
+                ),
+
+                mitre.get(
+                    "technique_name"
+                ),
+
+                mitre.get(
+                    "tactic"
+                ),
+
+                mitre.get(
+                    "description"
+                )
             )
         )
 
+        incident_id = cursor.lastrowid
 
-        row = cursor.fetchone()
+        # =====================================================
+        # RESPONSE ACTIONS
+        # =====================================================
 
-
-        if row is None:
-
-            return None
-
-
-        return self._incident_from_row(
-            row
+        response = incident.get(
+            "response",
+            incident.get(
+                "recommended_response",
+                {}
+            )
         )
 
+        if isinstance(
+            response,
+            dict
+        ):
 
-    # =========================================================
-    # CONVERT DATABASE ROW
-    # =========================================================
-
-    def _incident_from_row(
-        self,
-        row
-    ):
-
-        incident = dict(
-            row
-        )
-
-
-        # -----------------------------------------------------
-        # Restore JSON fields
-        # -----------------------------------------------------
-
-        incident["reasons"] = (
-            self._json_load(
-                incident.get(
-                    "reasons"
-                ),
+            actions = response.get(
+                "recommended_actions",
                 []
             )
-        )
 
+            for action in actions:
 
-        incident["evidence"] = (
-            self._json_load(
-                incident.get(
-                    "evidence"
-                ),
-                []
-            )
-        )
-
-
-        incident["recommended_response"] = (
-            self._json_load(
-                incident.get(
-                    "recommended_response"
-                ),
-                []
-            )
-        )
-
-
-        # -----------------------------------------------------
-        # Reconstruct MITRE object
-        # -----------------------------------------------------
-
-        incident["mitre"] = {
-
-            "technique_id":
-                incident.get(
-                    "mitre_technique_id"
-                ),
-
-            "technique_name":
-                incident.get(
-                    "mitre_technique_name"
-                ),
-
-            "tactic":
-                incident.get(
-                    "mitre_tactic"
-                ),
-
-            "description":
-                incident.get(
-                    "mitre_description"
+                cursor.execute(
+                    """
+                    INSERT INTO response_actions (
+                        incident_id,
+                        action,
+                        status
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        incident_id,
+                        action,
+                        "recommended"
+                    )
                 )
 
-        }
+        self.database.connection.commit()
 
-
-        # -----------------------------------------------------
-        # Clean database-specific MITRE columns from the
-        # frontend representation.
-        # -----------------------------------------------------
-
-        incident.pop(
-            "mitre_technique_id",
-            None
-        )
-
-        incident.pop(
-            "mitre_technique_name",
-            None
-        )
-
-        incident.pop(
-            "mitre_tactic",
-            None
-        )
-
-        incident.pop(
-            "mitre_description",
-            None
-        )
-
-
-        return incident
-
+        return incident_id
 
     # =========================================================
     # JSON HELPER
     # =========================================================
 
     @staticmethod
-    def _json_load(
-        value,
-        default
-    ):
+    def _parse_json(value):
 
-        if value is None:
+        if not value:
 
-            return default
-
-
-        if isinstance(
-            value,
-            (
-                list,
-                dict
-            )
-        ):
-
-            return value
-
+            return []
 
         try:
 
@@ -780,8 +588,89 @@ class IncidentStore:
             TypeError
         ):
 
-            return default
+            return []
 
+    # =========================================================
+    # GET ALL INCIDENTS
+    # =========================================================
+
+    def get_incidents(self):
+
+        cursor = self.database.connection.cursor()
+
+        rows = cursor.execute(
+            """
+            SELECT *
+            FROM incidents
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        incidents = []
+
+        for row in rows:
+
+            incident = dict(row)
+
+            incident["reasons"] = self._parse_json(
+                incident.get(
+                    "reasons"
+                )
+            )
+
+            incident["evidence"] = self._parse_json(
+                incident.get(
+                    "evidence"
+                )
+            )
+
+            incidents.append(
+                incident
+            )
+
+        return incidents
+
+    # =========================================================
+    # GET SINGLE INCIDENT
+    # =========================================================
+
+    def get_incident(
+        self,
+        incident_id
+    ):
+
+        cursor = self.database.connection.cursor()
+
+        row = cursor.execute(
+            """
+            SELECT *
+            FROM incidents
+            WHERE id = ?
+            """,
+            (
+                incident_id,
+            )
+        ).fetchone()
+
+        if row is None:
+
+            return None
+
+        incident = dict(row)
+
+        incident["reasons"] = self._parse_json(
+            incident.get(
+                "reasons"
+            )
+        )
+
+        incident["evidence"] = self._parse_json(
+            incident.get(
+                "evidence"
+            )
+        )
+
+        return incident
 
     # =========================================================
     # UPDATE INCIDENT STATUS
@@ -793,47 +682,24 @@ class IncidentStore:
         status
     ):
 
-        allowed_statuses = {
+        status = status.lower().strip()
 
-            "open",
-
-            "investigating",
-
-            "contained",
-
-            "resolved",
-
-            "false_positive"
-
-        }
-
-
-        if status not in allowed_statuses:
+        if status not in self.ALLOWED_STATUSES:
 
             raise ValueError(
                 "Invalid incident status. "
-                "Allowed values: "
-                + ", ".join(
-                    sorted(
-                        allowed_statuses
-                    )
-                )
+                f"Allowed values: "
+                f"{', '.join(sorted(self.ALLOWED_STATUSES))}"
             )
 
-
-        cursor = (
-            self.database.connection.cursor()
-        )
-
+        cursor = self.database.connection.cursor()
 
         cursor.execute(
             """
             UPDATE incidents
-
             SET
                 status = ?,
                 updated_at = CURRENT_TIMESTAMP
-
             WHERE id = ?
             """,
             (
@@ -842,8 +708,6 @@ class IncidentStore:
             )
         )
 
-
         self.database.connection.commit()
-
 
         return cursor.rowcount
