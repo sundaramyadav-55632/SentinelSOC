@@ -1,0 +1,14 @@
+Sep 13 10:00:01 firewall kernel: TCP connection from 192.168.1.70:49100 to 192.168.1.10:21
+Sep 13 10:00:02 firewall kernel: TCP connection from 192.168.1.70:49101 to 192.168.1.10:22
+Sep 13 10:00:03 firewall kernel: TCP connection from 192.168.1.70:49102 to 192.168.1.10:23
+Sep 13 10:00:04 firewall kernel: TCP connection from 192.168.1.70:49103 to 192.168.1.10:25
+Sep 13 10:00:05 firewall kernel: TCP connection from 192.168.1.70:49104 to 192.168.1.10:53
+Sep 13 10:00:06 firewall kernel: TCP connection from 192.168.1.70:49105 to 192.168.1.10:80
+Sep 13 10:00:07 firewall kernel: TCP connection from 192.168.1.70:49106 to 192.168.1.10:443
+Sep 13 10:00:08 firewall kernel: TCP connection from 192.168.1.70:49107 to 192.168.1.10:445
+Sep 13 10:01:01 sshd[1001]: Failed password for admin from 192.168.1.70 port 50001
+Sep 13 10:01:05 sshd[1002]: Failed password for admin from 192.168.1.70 port 50002
+Sep 13 10:01:10 sshd[1003]: Failed password for admin from 192.168.1.70 port 50003
+Sep 13 10:01:15 sshd[1004]: Failed password for admin from 192.168.1.70 port 50004
+Sep 13 10:01:20 sshd[1005]: Failed password for admin from 192.168.1.70 port 50005
+Sep 13 10:01:25 sshd[1006]: Accepted password for admin from 192.168.1.70 port 50006

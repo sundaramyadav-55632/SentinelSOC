@@ -1,394 +1,477 @@
-from collections import defaultdict
-
-
 class CorrelationEngine:
 
-    def __init__(self, correlation_window_seconds=300):
+    def __init__(self):
+        pass
 
-        self.correlation_window_seconds = (
-            correlation_window_seconds
-        )
+    # =========================================================
+    # NORMALIZE OBJECT / DICT
+    # =========================================================
 
-    def _get(self, obj, field, default=None):
+    @staticmethod
+    def _to_dict(value):
 
-        if isinstance(obj, dict):
-            return obj.get(field, default)
+        if isinstance(value, dict):
 
-        return getattr(obj, field, default)
+            return value
 
-    def _detect_incident_type(self, alerts):
+        if hasattr(
+            value,
+            "to_dict"
+        ):
 
-        types = set()
+            return value.to_dict()
 
-        for alert in alerts:
+        return vars(value)
 
-            incident_type = self._get(
-                alert,
-                "incident_type"
-            )
+    # =========================================================
+    # MAIN CORRELATION
+    # =========================================================
 
-            if not incident_type:
-                incident_type = self._get(
-                    alert,
-                    "alert_type"
-                )
-
-            if not incident_type:
-                incident_type = self._get(
-                    alert,
-                    "event_type"
-                )
-
-            if incident_type:
-                types.add(incident_type)
-
-        # Strongest/most specific classification first
-        priority = [
-            "brute_force_with_success",
-            "password_spray",
-            "brute_force",
-            "port_scan",
-            "connection_burst",
-            "suspicious_activity"
-        ]
-
-        for incident_type in priority:
-
-            if incident_type in types:
-                return incident_type
-
-        # Port scan can also be identified from network telemetry
-        # when the detector type was not preserved.
-        port_count = 0
-
-        for alert in alerts:
-
-            destination_port = self._get(
-                alert,
-                "destination_port"
-            )
-
-            if destination_port:
-                port_count += 1
-
-        if port_count >= 5:
-            return "port_scan"
-
-        if types:
-            return next(iter(types))
-
-        return "suspicious_activity"
-
-    def correlate(self, alerts, events=None):
+    def correlate(
+        self,
+        alerts,
+        events
+    ):
 
         incidents = []
 
         if not alerts:
+
             return incidents
 
-        # ---------------------------------------------------------
+        normalized_alerts = [
+            self._to_dict(alert)
+            for alert in alerts
+        ]
+
+        normalized_events = [
+            self._to_dict(event)
+            for event in events
+        ]
+
+        # -----------------------------------------------------
         # Group alerts by source IP
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
 
-        source_groups = defaultdict(list)
+        grouped = {}
 
-        alerts_without_ip = []
+        for alert in normalized_alerts:
 
-        for alert in alerts:
-
-            source_ip = self._get(
-                alert,
+            source_ip = alert.get(
                 "source_ip"
             )
 
-            if source_ip:
+            if not source_ip:
 
-                source_groups[source_ip].append(
-                    alert
-                )
+                source_ip = "unknown"
 
-            else:
+            grouped.setdefault(
+                source_ip,
+                []
+            ).append(alert)
 
-                alerts_without_ip.append(
-                    alert
-                )
-
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
         # Build incidents
-        # ---------------------------------------------------------
+        # -----------------------------------------------------
 
-        for source_ip, grouped_alerts in source_groups.items():
+        for source_ip, source_alerts in grouped.items():
 
-            usernames = set()
-            destination_ports = set()
+            incident = (
+                self._build_correlated_incident(
+                    source_ip,
+                    source_alerts,
+                    normalized_events
+                )
+            )
 
-            failed_attempts = 0
-            successful_login = False
+            if incident:
 
-            evidence = []
-
-            for alert in grouped_alerts:
-
-                username = self._get(
-                    alert,
-                    "username"
+                incidents.append(
+                    incident
                 )
 
-                if username:
-                    usernames.add(username)
+        return incidents
 
-                destination_port = self._get(
-                    alert,
-                    "destination_port"
+    # =========================================================
+    # BUILD CORRELATED INCIDENT
+    # =========================================================
+
+    def _build_correlated_incident(
+        self,
+        source_ip,
+        alerts,
+        events
+    ):
+
+        attack_types = set()
+
+        failed_attempts = 0
+
+        unique_users = set()
+
+        unique_ports = set()
+
+        successful_login = False
+
+        reasons = []
+
+        evidence = []
+
+        # =====================================================
+        # ALERT ANALYSIS
+        # =====================================================
+
+        for alert in alerts:
+
+            incident_type = alert.get(
+                "incident_type",
+                alert.get(
+                    "alert_type",
+                    ""
+                )
+            )
+
+            if incident_type:
+
+                attack_types.add(
+                    incident_type
                 )
 
-                if destination_port:
-                    destination_ports.add(
-                        destination_port
-                    )
-
-                failed = self._get(
-                    alert,
+            failed_attempts += int(
+                alert.get(
                     "failed_attempts",
                     0
-                )
-
-                if isinstance(failed, int):
-                    failed_attempts += failed
-
-                if self._get(
-                    alert,
-                    "successful_login",
-                    False
-                ):
-                    successful_login = True
-
-                raw_message = self._get(
-                    alert,
-                    "message"
-                )
-
-                if not raw_message:
-                    raw_message = self._get(
-                        alert,
-                        "raw_log"
-                    )
-
-                if raw_message:
-                    evidence.append(
-                        raw_message
-                    )
-
-            # -----------------------------------------------------
-            # Correct incident classification
-            # -----------------------------------------------------
-
-            incident_type = self._detect_incident_type(
-                grouped_alerts
+                ) or 0
             )
 
-            # -----------------------------------------------------
-            # Cross-event correlation
-            # -----------------------------------------------------
-
-            if events:
-
-                for event in events:
-
-                    event_source_ip = self._get(
-                        event,
-                        "source_ip"
-                    )
-
-                    if event_source_ip != source_ip:
-                        continue
-
-                    username = self._get(
-                        event,
-                        "username"
-                    )
-
-                    if username:
-                        usernames.add(
-                            username
-                        )
-
-                    destination_port = self._get(
-                        event,
-                        "destination_port"
-                    )
-
-                    if destination_port:
-                        destination_ports.add(
-                            destination_port
-                        )
-
-            # -----------------------------------------------------
-            # Special handling for port scans
-            # -----------------------------------------------------
-
-            if (
-                len(destination_ports) >= 5
-                and incident_type
-                == "suspicious_activity"
-            ):
-
-                incident_type = "port_scan"
-
-            # -----------------------------------------------------
-            # Description
-            # -----------------------------------------------------
-
-            if incident_type == "port_scan":
-
-                description = (
-                    f"Network port scan detected from "
-                    f"{source_ip}. "
-                    f"{len(destination_ports)} unique "
-                    f"destination ports were probed."
-                )
-
-            elif incident_type == "brute_force":
-
-                description = (
-                    f"Brute-force authentication activity "
-                    f"detected from {source_ip}."
-                )
-
-            elif incident_type == "password_spray":
-
-                description = (
-                    f"Password-spray activity detected "
-                    f"from {source_ip} targeting "
-                    f"{len(usernames)} user account(s)."
-                )
-
-            else:
-
-                description = (
-                    f"Correlated {len(grouped_alerts)} "
-                    f"security alert(s) from "
-                    f"{source_ip}."
-                )
-
-            # -----------------------------------------------------
-            # Incident object
-            # -----------------------------------------------------
-
-            incident = {
-
-                "incident_type":
-                    incident_type,
-
-                "source_ip":
-                    source_ip,
-
-                "username":
-                    (
-                        next(iter(usernames))
-                        if usernames
-                        else None
-                    ),
-
-                "successful_login":
-                    successful_login,
-
-                "failed_attempts":
-                    failed_attempts,
-
-                "unique_users":
-                    len(usernames),
-
-                "unique_ports":
-                    len(destination_ports),
-
-                "alert_count":
-                    len(grouped_alerts),
-
-                "alerts":
-                    grouped_alerts,
-
-                "evidence":
-                    evidence,
-
-                "description":
-                    description
-            }
-
-            incidents.append(
-                incident
-            )
-
-        # ---------------------------------------------------------
-        # Alerts without source IP
-        # ---------------------------------------------------------
-
-        for alert in alerts_without_ip:
-
-            incident_type = self._detect_incident_type(
-                [alert]
-            )
-
-            username = self._get(
-                alert,
+            username = alert.get(
                 "username"
             )
 
-            raw_message = self._get(
-                alert,
-                "message"
-            )
+            if username:
 
-            if not raw_message:
-                raw_message = self._get(
-                    alert,
-                    "raw_log"
+                unique_users.add(
+                    username
                 )
 
-            incidents.append({
+            if alert.get(
+                "successful_login",
+                False
+            ):
 
-                "incident_type":
-                    incident_type,
+                successful_login = True
 
-                "source_ip":
-                    None,
+            # Some detectors provide a count
+            # rather than individual ports.
 
-                "username":
-                    username,
+            port_count = alert.get(
+                "unique_ports",
+                0
+            )
 
-                "successful_login":
-                    self._get(
-                        alert,
-                        "successful_login",
-                        False
-                    ),
+            try:
 
-                "failed_attempts":
-                    self._get(
-                        alert,
-                        "failed_attempts",
-                        0
-                    ),
+                port_count = int(
+                    port_count
+                )
 
-                "unique_users":
-                    1 if username else 0,
+            except (
+                ValueError,
+                TypeError
+            ):
 
-                "unique_ports":
-                    0,
+                port_count = 0
 
-                "alert_count":
-                    1,
+            if port_count > 0:
 
-                "alerts":
-                    [alert],
+                for port_number in range(
+                    port_count
+                ):
 
-                "evidence":
-                    [raw_message]
-                    if raw_message
-                    else [],
+                    unique_ports.add(
+                        f"alert-port-{port_number}"
+                    )
 
-                "description":
-                    "Security alert without a source IP."
-            })
+        # =====================================================
+        # EVENT ANALYSIS
+        # =====================================================
 
-        return incidents
+        for event in events:
+
+            if event.get(
+                "source_ip"
+            ) != source_ip:
+
+                continue
+
+            event_type = event.get(
+                "event_type",
+                ""
+            )
+
+            username = event.get(
+                "username"
+            )
+
+            if username:
+
+                unique_users.add(
+                    username
+                )
+
+            destination_port = event.get(
+                "destination_port"
+            )
+
+            if destination_port:
+
+                unique_ports.add(
+                    destination_port
+                )
+
+            if event_type in {
+                "login_success",
+                "authentication_success",
+                "successful_login"
+            }:
+
+                successful_login = True
+
+        # =====================================================
+        # ATTACK TYPE
+        # =====================================================
+
+        if (
+            "port_scan" in attack_types
+            and "brute_force" in attack_types
+        ):
+
+            incident_type = "attack_chain"
+
+        elif "port_scan" in attack_types:
+
+            incident_type = "port_scan"
+
+        elif "password_spray" in attack_types:
+
+            incident_type = "password_spray"
+
+        elif "brute_force" in attack_types:
+
+            incident_type = "brute_force"
+
+        else:
+
+            incident_type = next(
+                iter(attack_types),
+                "suspicious_activity"
+            )
+
+        # =====================================================
+        # REASONS
+        # =====================================================
+
+        if "port_scan" in attack_types:
+
+            reasons.append(
+                "Network reconnaissance detected"
+            )
+
+        if "brute_force" in attack_types:
+
+            reasons.append(
+                "Repeated authentication failures detected"
+            )
+
+        if "password_spray" in attack_types:
+
+            reasons.append(
+                "Multiple user accounts targeted"
+            )
+
+        if (
+            "port_scan" in attack_types
+            and "brute_force" in attack_types
+        ):
+
+            reasons.append(
+                "Network reconnaissance followed by authentication attacks"
+            )
+
+        if successful_login:
+
+            reasons.append(
+                "Successful login occurred after suspicious activity"
+            )
+
+        if source_ip != "unknown":
+
+            reasons.append(
+                "Source IP correlated across multiple security events"
+            )
+
+        # =====================================================
+        # EVIDENCE
+        # =====================================================
+
+        for attack_type in sorted(
+            attack_types
+        ):
+
+            evidence.append(
+                f"Detection alert: {attack_type}"
+            )
+
+        if failed_attempts:
+
+            evidence.append(
+                f"{failed_attempts} failed authentication attempts observed"
+            )
+
+        if unique_ports:
+
+            evidence.append(
+                f"{len(unique_ports)} unique destination ports observed"
+            )
+
+        if unique_users:
+
+            evidence.append(
+                f"{len(unique_users)} unique user accounts observed"
+            )
+
+        if successful_login:
+
+            evidence.append(
+                "Successful authentication event observed"
+            )
+
+        # =====================================================
+        # CONFIDENCE
+        # =====================================================
+
+        confidence = 60
+
+        if len(attack_types) >= 2:
+
+            confidence += 15
+
+        if (
+            "port_scan" in attack_types
+            and "brute_force" in attack_types
+        ):
+
+            confidence += 15
+
+        if successful_login:
+
+            confidence += 10
+
+        confidence = min(
+            confidence,
+            100
+        )
+
+        # =====================================================
+        # DESCRIPTION
+        # =====================================================
+
+        if incident_type == "attack_chain":
+
+            description = (
+                f"Multi-stage attack activity detected "
+                f"from {source_ip}. Network reconnaissance "
+                f"was correlated with authentication attacks."
+            )
+
+        elif incident_type == "brute_force":
+
+            description = (
+                f"Brute-force authentication activity "
+                f"detected from {source_ip}."
+            )
+
+        elif incident_type == "password_spray":
+
+            description = (
+                f"Password-spray activity detected "
+                f"from {source_ip}."
+            )
+
+        elif incident_type == "port_scan":
+
+            description = (
+                f"Network port scanning activity "
+                f"detected from {source_ip}."
+            )
+
+        else:
+
+            description = (
+                f"Suspicious security activity "
+                f"detected from {source_ip}."
+            )
+
+        # =====================================================
+        # RETURN INCIDENT
+        # =====================================================
+
+        return {
+
+            "incident_type":
+                incident_type,
+
+            "source_ip":
+                None
+                if source_ip == "unknown"
+                else source_ip,
+
+            "username":
+                next(
+                    iter(unique_users)
+                )
+                if len(unique_users) == 1
+                else None,
+
+            "failed_attempts":
+                failed_attempts,
+
+            "unique_users":
+                len(unique_users),
+
+            "unique_ports":
+                len(unique_ports),
+
+            "successful_login":
+                successful_login,
+
+            "attack_types":
+                sorted(
+                    attack_types
+                ),
+
+            "risk_score":
+                0,
+
+            "severity":
+                "low",
+
+            "confidence":
+                confidence,
+
+            "status":
+                "open",
+
+            "reasons":
+                reasons,
+
+            "evidence":
+                evidence,
+
+            "description":
+                description,
+
+            "correlated_alert_count":
+                len(alerts)
+
+        }

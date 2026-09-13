@@ -13,11 +13,17 @@ class RiskEngine:
             incident.get("alert_type", "")
         )
 
-        # --------------------------------------------------
-        # Base risk by attack type
-        # --------------------------------------------------
+        # -----------------------------
+        # BASE ATTACK SCORE
+        # -----------------------------
 
-        if incident_type == "brute_force":
+        if incident_type == "attack_chain":
+            score += 50
+            reasons.append(
+                "Multi-stage attack chain detected"
+            )
+
+        elif incident_type == "brute_force":
             score += 40
             reasons.append(
                 "Brute-force activity detected"
@@ -41,9 +47,9 @@ class RiskEngine:
                 "Port-scan activity detected"
             )
 
-        # --------------------------------------------------
-        # Successful authentication after attack
-        # --------------------------------------------------
+        # -----------------------------
+        # SUCCESSFUL LOGIN
+        # -----------------------------
 
         if incident.get("successful_login", False):
 
@@ -53,9 +59,9 @@ class RiskEngine:
                 "Successful login occurred after failed attempts"
             )
 
-        # --------------------------------------------------
-        # Source IP correlation
-        # --------------------------------------------------
+        # -----------------------------
+        # SOURCE CORRELATION
+        # -----------------------------
 
         if incident.get("source_ip"):
 
@@ -65,9 +71,9 @@ class RiskEngine:
                 "Source IP correlated across security events"
             )
 
-        # --------------------------------------------------
-        # Username correlation
-        # --------------------------------------------------
+        # -----------------------------
+        # USER CORRELATION
+        # -----------------------------
 
         if incident.get("username"):
 
@@ -77,9 +83,9 @@ class RiskEngine:
                 "Username correlated across security events"
             )
 
-        # --------------------------------------------------
-        # Authentication failure volume
-        # --------------------------------------------------
+        # -----------------------------
+        # FAILED ATTEMPTS
+        # -----------------------------
 
         failed_attempts = incident.get(
             "failed_attempts",
@@ -94,9 +100,9 @@ class RiskEngine:
                 "Multiple authentication failures detected"
             )
 
-        # --------------------------------------------------
-        # Password spray targeted users
-        # --------------------------------------------------
+        # -----------------------------
+        # MULTIPLE USERS
+        # -----------------------------
 
         unique_users = incident.get(
             "unique_users",
@@ -111,9 +117,9 @@ class RiskEngine:
                 "Multiple user accounts targeted"
             )
 
-        # --------------------------------------------------
-        # Port scan volume
-        # --------------------------------------------------
+        # -----------------------------
+        # PORT RECON
+        # -----------------------------
 
         unique_ports = incident.get(
             "unique_ports",
@@ -136,15 +142,15 @@ class RiskEngine:
                 "High-volume port reconnaissance detected"
             )
 
-        # --------------------------------------------------
-        # Cap score at 100
-        # --------------------------------------------------
+        # -----------------------------
+        # CAP SCORE
+        # -----------------------------
 
         score = min(score, 100)
 
-        # --------------------------------------------------
-        # Determine severity
-        # --------------------------------------------------
+        # -----------------------------
+        # SEVERITY
+        # -----------------------------
 
         if score >= 80:
 
@@ -167,36 +173,3 @@ class RiskEngine:
             "severity": severity,
             "reasons": reasons
         }
-
-
-if __name__ == "__main__":
-
-    engine = RiskEngine()
-
-    test_incident = {
-        "incident_type": "port_scan",
-        "source_ip": "192.168.1.70",
-        "unique_ports": 8,
-        "connection_attempts": 8
-    }
-
-    result = engine.calculate_score(
-        test_incident
-    )
-
-    print("Risk Assessment")
-    print("----------------")
-    print(
-        f"Risk Score: "
-        f"{result['risk_score']}/100"
-    )
-    print(
-        f"Severity: "
-        f"{result['severity'].upper()}"
-    )
-
-    print("\nReasons:")
-
-    for reason in result["reasons"]:
-
-        print(f"- {reason}")
