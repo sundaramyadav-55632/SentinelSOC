@@ -22,6 +22,9 @@ class Database:
 
         self.create_tables()
 
+    # =========================================================
+    # CREATE TABLES
+    # =========================================================
 
     def create_tables(self):
 
@@ -47,11 +50,11 @@ class Database:
                 protocol TEXT,
                 action TEXT,
                 message TEXT,
+                raw_log TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
-
 
         # =====================================================
         # ALERTS
@@ -76,7 +79,6 @@ class Database:
             """
         )
 
-
         # =====================================================
         # INCIDENTS
         # =====================================================
@@ -85,39 +87,29 @@ class Database:
             """
             CREATE TABLE IF NOT EXISTS incidents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-
                 incident_type TEXT,
-                severity TEXT,
-                risk_score INTEGER DEFAULT 0,
-                confidence INTEGER DEFAULT 0,
-
                 source_ip TEXT,
                 username TEXT,
-
                 failed_attempts INTEGER DEFAULT 0,
                 unique_users INTEGER DEFAULT 0,
                 unique_ports INTEGER DEFAULT 0,
-
-                successful_login INTEGER DEFAULT 0,
-
+                risk_score INTEGER DEFAULT 0,
+                severity TEXT,
                 status TEXT DEFAULT 'open',
-
-                description TEXT,
                 reasons TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                confidence INTEGER DEFAULT 0,
+                successful_login INTEGER DEFAULT 0,
+                description TEXT,
                 evidence TEXT,
-                recommended_response TEXT,
-
                 mitre_technique_id TEXT,
                 mitre_technique_name TEXT,
                 mitre_tactic TEXT,
                 mitre_description TEXT,
-
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
-
 
         # =====================================================
         # RESPONSE ACTIONS
@@ -138,9 +130,10 @@ class Database:
             """
         )
 
+        self.connection.commit()
 
         # =====================================================
-        # MIGRATE EXISTING DATABASE
+        # DATABASE MIGRATIONS
         # =====================================================
 
         self._migrate_table(
@@ -158,10 +151,10 @@ class Database:
                 "protocol": "TEXT",
                 "action": "TEXT",
                 "message": "TEXT",
+                "raw_log": "TEXT",
                 "created_at": "TEXT"
             }
         )
-
 
         self._migrate_table(
             "alerts",
@@ -180,34 +173,31 @@ class Database:
             }
         )
 
-
         self._migrate_table(
             "incidents",
             {
                 "incident_type": "TEXT",
-                "severity": "TEXT",
-                "risk_score": "INTEGER DEFAULT 0",
-                "confidence": "INTEGER DEFAULT 0",
                 "source_ip": "TEXT",
                 "username": "TEXT",
                 "failed_attempts": "INTEGER DEFAULT 0",
                 "unique_users": "INTEGER DEFAULT 0",
                 "unique_ports": "INTEGER DEFAULT 0",
-                "successful_login": "INTEGER DEFAULT 0",
+                "risk_score": "INTEGER DEFAULT 0",
+                "severity": "TEXT",
                 "status": "TEXT DEFAULT 'open'",
-                "description": "TEXT",
                 "reasons": "TEXT",
+                "created_at": "TEXT",
+                "confidence": "INTEGER DEFAULT 0",
+                "successful_login": "INTEGER DEFAULT 0",
+                "description": "TEXT",
                 "evidence": "TEXT",
-                "recommended_response": "TEXT",
                 "mitre_technique_id": "TEXT",
                 "mitre_technique_name": "TEXT",
                 "mitre_tactic": "TEXT",
                 "mitre_description": "TEXT",
-                "created_at": "TEXT",
                 "updated_at": "TEXT"
             }
         )
-
 
         self._migrate_table(
             "response_actions",
@@ -219,9 +209,7 @@ class Database:
             }
         )
 
-
         self.connection.commit()
-
 
     # =========================================================
     # SAFE SQLITE MIGRATION
@@ -243,7 +231,6 @@ class Database:
             row["name"]
             for row in cursor.fetchall()
         }
-
 
         for column_name, definition in columns.items():
 
@@ -272,6 +259,9 @@ class Database:
                         f"{error}"
                     )
 
+    # =========================================================
+    # CLOSE
+    # =========================================================
 
     def close(self):
 
