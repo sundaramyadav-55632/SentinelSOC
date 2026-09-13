@@ -8,7 +8,7 @@ class Database:
 
         self.database_path = database_path
 
-        Path(self.database_path).parent.mkdir(
+        Path(database_path).parent.mkdir(
             parents=True,
             exist_ok=True
         )
@@ -22,204 +22,229 @@ class Database:
 
         self.create_tables()
 
-    # =========================================================
-    # CREATE TABLES
-    # =========================================================
+    # ==========================================================
+    # CREATE DATABASE TABLES
+    # ==========================================================
 
     def create_tables(self):
 
         cursor = self.connection.cursor()
 
-        # =====================================================
+        # ------------------------------------------------------
         # EVENTS
-        # =====================================================
+        # ------------------------------------------------------
 
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS events (
+
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                event_hash TEXT UNIQUE,
+
                 timestamp TEXT,
+
                 source TEXT,
+
                 event_type TEXT,
+
                 severity TEXT,
-                username TEXT,
+
                 source_ip TEXT,
+
                 source_port INTEGER,
+
                 destination_ip TEXT,
+
                 destination_port INTEGER,
+
+                username TEXT,
+
                 protocol TEXT,
+
                 action TEXT,
-                message TEXT,
+
                 raw_log TEXT,
+
+                metadata TEXT,
+
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # =====================================================
+        # ------------------------------------------------------
         # ALERTS
-        # =====================================================
+        # ------------------------------------------------------
 
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS alerts (
+
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                alert_hash TEXT UNIQUE,
+
                 alert_type TEXT,
-                incident_type TEXT,
-                severity TEXT,
-                source_ip TEXT,
-                username TEXT,
-                failed_attempts INTEGER DEFAULT 0,
-                unique_users INTEGER DEFAULT 0,
-                unique_ports INTEGER DEFAULT 0,
-                confidence INTEGER DEFAULT 0,
+
+                event_type TEXT,
+
                 message TEXT,
+
+                source_ip TEXT,
+
+                username TEXT,
+
+                severity TEXT,
+
+                confidence INTEGER,
+
+                evidence TEXT,
+
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # =====================================================
+        # ------------------------------------------------------
         # INCIDENTS
-        # =====================================================
+        # ------------------------------------------------------
 
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS incidents (
+
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                incident_hash TEXT UNIQUE,
+
                 incident_type TEXT,
+
                 source_ip TEXT,
+
                 username TEXT,
+
                 failed_attempts INTEGER DEFAULT 0,
+
                 unique_users INTEGER DEFAULT 0,
+
                 unique_ports INTEGER DEFAULT 0,
+
                 risk_score INTEGER DEFAULT 0,
+
                 severity TEXT,
+
                 status TEXT DEFAULT 'open',
+
                 reasons TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                confidence INTEGER DEFAULT 0,
-                successful_login INTEGER DEFAULT 0,
-                description TEXT,
+
                 evidence TEXT,
+
+                attack_types TEXT,
+
+                successful_login INTEGER DEFAULT 0,
+
+                confidence INTEGER,
+
                 mitre_technique_id TEXT,
-                mitre_technique_name TEXT,
+
+                mitre_technique TEXT,
+
                 mitre_tactic TEXT,
-                mitre_description TEXT,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+
+                description TEXT,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # =====================================================
+        # ------------------------------------------------------
         # RESPONSE ACTIONS
-        # =====================================================
+        # ------------------------------------------------------
 
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS response_actions (
+
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
                 incident_id INTEGER,
+
                 action TEXT,
+
                 status TEXT DEFAULT 'recommended',
+
+                details TEXT,
+
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
                 FOREIGN KEY (incident_id)
-                REFERENCES incidents(id)
+                    REFERENCES incidents(id)
             )
+            """
+        )
+
+        # ------------------------------------------------------
+        # INDEXES
+        # ------------------------------------------------------
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_events_source_ip
+            ON events(source_ip)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_events_event_type
+            ON events(event_type)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_events_timestamp
+            ON events(timestamp)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_source_ip
+            ON alerts(source_ip)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_incidents_source_ip
+            ON incidents(source_ip)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_incidents_status
+            ON incidents(status)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_incidents_severity
+            ON incidents(severity)
             """
         )
 
         self.connection.commit()
 
-        # =====================================================
-        # DATABASE MIGRATIONS
-        # =====================================================
+    # ==========================================================
+    # DATABASE MIGRATION SUPPORT
+    # ==========================================================
 
-        self._migrate_table(
-            "events",
-            {
-                "timestamp": "TEXT",
-                "source": "TEXT",
-                "event_type": "TEXT",
-                "severity": "TEXT",
-                "username": "TEXT",
-                "source_ip": "TEXT",
-                "source_port": "INTEGER",
-                "destination_ip": "TEXT",
-                "destination_port": "INTEGER",
-                "protocol": "TEXT",
-                "action": "TEXT",
-                "message": "TEXT",
-                "raw_log": "TEXT",
-                "created_at": "TEXT"
-            }
-        )
-
-        self._migrate_table(
-            "alerts",
-            {
-                "alert_type": "TEXT",
-                "incident_type": "TEXT",
-                "severity": "TEXT",
-                "source_ip": "TEXT",
-                "username": "TEXT",
-                "failed_attempts": "INTEGER DEFAULT 0",
-                "unique_users": "INTEGER DEFAULT 0",
-                "unique_ports": "INTEGER DEFAULT 0",
-                "confidence": "INTEGER DEFAULT 0",
-                "message": "TEXT",
-                "created_at": "TEXT"
-            }
-        )
-
-        self._migrate_table(
-            "incidents",
-            {
-                "incident_type": "TEXT",
-                "source_ip": "TEXT",
-                "username": "TEXT",
-                "failed_attempts": "INTEGER DEFAULT 0",
-                "unique_users": "INTEGER DEFAULT 0",
-                "unique_ports": "INTEGER DEFAULT 0",
-                "risk_score": "INTEGER DEFAULT 0",
-                "severity": "TEXT",
-                "status": "TEXT DEFAULT 'open'",
-                "reasons": "TEXT",
-                "created_at": "TEXT",
-                "confidence": "INTEGER DEFAULT 0",
-                "successful_login": "INTEGER DEFAULT 0",
-                "description": "TEXT",
-                "evidence": "TEXT",
-                "mitre_technique_id": "TEXT",
-                "mitre_technique_name": "TEXT",
-                "mitre_tactic": "TEXT",
-                "mitre_description": "TEXT",
-                "updated_at": "TEXT"
-            }
-        )
-
-        self._migrate_table(
-            "response_actions",
-            {
-                "incident_id": "INTEGER",
-                "action": "TEXT",
-                "status": "TEXT DEFAULT 'recommended'",
-                "created_at": "TEXT"
-            }
-        )
-
-        self.connection.commit()
-
-    # =========================================================
-    # SAFE SQLITE MIGRATION
-    # =========================================================
-
-    def _migrate_table(
-        self,
-        table_name,
-        columns
-    ):
+    def _column_exists(self, table_name, column_name):
 
         cursor = self.connection.cursor()
 
@@ -227,44 +252,44 @@ class Database:
             f"PRAGMA table_info({table_name})"
         )
 
-        existing_columns = {
+        columns = [
             row["name"]
             for row in cursor.fetchall()
-        }
+        ]
 
-        for column_name, definition in columns.items():
+        return column_name in columns
 
-            if column_name not in existing_columns:
+    def add_column_if_missing(
+        self,
+        table_name,
+        column_name,
+        column_definition
+    ):
 
-                try:
+        if not self._column_exists(
+            table_name,
+            column_name
+        ):
 
-                    cursor.execute(
-                        f"""
-                        ALTER TABLE {table_name}
-                        ADD COLUMN {column_name}
-                        {definition}
-                        """
-                    )
+            cursor = self.connection.cursor()
 
-                    print(
-                        f"[+] Database migration: "
-                        f"{table_name}.{column_name}"
-                    )
+            cursor.execute(
+                f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN {column_name}
+                {column_definition}
+                """
+            )
 
-                except sqlite3.OperationalError as error:
+            self.connection.commit()
 
-                    print(
-                        f"[!] Migration warning: "
-                        f"{table_name}.{column_name}: "
-                        f"{error}"
-                    )
-
-    # =========================================================
-    # CLOSE
-    # =========================================================
+    # ==========================================================
+    # CONNECTION
+    # ==========================================================
 
     def close(self):
 
         if self.connection:
 
             self.connection.close()
+            self.connection = None
